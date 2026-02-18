@@ -1,5 +1,2 @@
 params:
-  metrics:
-      - accuracy
-      - f1
-      - roc_auc
+  threshold: 0.5
