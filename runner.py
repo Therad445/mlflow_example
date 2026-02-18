@@ -1,11 +1,22 @@
 from datetime import datetime
+from pathlib import Path
 
 import mlflow
 import mlflow.sklearn
 import mlflow.xgboost
 
-from constants import EXPERIMENT_NAME, MLFLOW_TRACKING_URI
+from constants import DATA_DIR, EXPERIMENT_NAME, MLFLOW_TRACKING_URI
 from scripts import evaluate, process_data, train
+
+
+def log_dataset_artifacts():
+    data_dir = Path(DATA_DIR)
+    files = ["X_train.csv", "y_train.csv", "X_test.csv", "y_test.csv"]
+
+    for name in files:
+        p = data_dir / name
+        if p.exists():
+            mlflow.log_artifact(str(p), artifact_path="dataset")
 
 
 def main():
@@ -16,6 +27,8 @@ def main():
         ts = datetime.now().strftime("%Y%m%d-%H%M%S")
 
         data_info = process_data()
+        log_dataset_artifacts()
+
         model, model_info = train()
 
         run_name = (
