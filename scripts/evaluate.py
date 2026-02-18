@@ -1,46 +1,96 @@
 import os
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from joblib import load
-from sklearn.metrics import get_scorer
+from sklearn.metrics import (
+    accuracy_score,
+    average_precision_score,
+    classification_report,
+    confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
 
-from constants import DATASET_PATH_PATTERN, MODEL_FILEPATH
+from constants import DATASET_PATH_PATTERN, MODEL_FILEPATH, ARTIFACTS_DIR
 from utils import get_logger, load_params
 
-STAGE_NAME = 'evaluate'
+STAGE_NAME = "evaluate"
 
 
-def evaluate():
+def evaluate(model=None) -> tuple[dict, list[str]]:
     logger = get_logger(logger_name=STAGE_NAME)
     params = load_params(stage_name=STAGE_NAME)
 
-    logger.info('Начали считывать датасеты')
-    splits = [None, None, None, None]
-    for i, split_name in enumerate(['X_train', 'X_test', 'y_train', 'y_test']):
-        splits[i] = pd.read_csv(DATASET_PATH_PATTERN.format(split_name=split_name))
-    X_train, X_test, y_train, y_test = splits
-    logger.info('Успешно считали датасеты!')
-    
-    logger.info('Загружаем обученную модель')
-    if not os.path.exists(MODEL_FILEPATH):
-        raise FileNotFoundError(
-            'Не нашли файл с моделью. Убедитесь, что был запущен шаг с обучением'
+    threshold = float(params.get("threshold", 0.5))
+
+    logger.info("Считываем датасеты")
+    X_test = pd.read_csv(DATASET_PATH_PATTERN.format(split_name="X_test"))
+    y_test = pd.read_csv(DATASET_PATH_PATTERN.format(split_name="y_test"))["target"].to_numpy()
+
+    if model is None:
+        logger.info("Загружаем обученную модель")
+        if not os.path.exists(MODEL_FILEPATH):
+            raise FileNotFoundError("Не нашли файл с моделью. Запусти train перед evaluate.")
+        model = load(MODEL_FILEPATH)
+
+    # scores для ROC-AUC / PR-AUC
+    if hasattr(model, "predict_proba"):
+        y_score = model.predict_proba(X_test)[:, 1]
+    elif hasattr(model, "decision_function"):
+        raw = model.decision_function(X_test)
+        # нормализуем в [0,1], чтобы метрики не падали
+        y_score = (raw - raw.min()) / (raw.max() - raw.min() + 1e-9)
+    else:
+        raise TypeError("Model has neither predict_proba nor decision_function")
+
+    y_pred = (y_score >= threshold).astype(int)
+
+    metrics = {
+        "accuracy": float(accuracy_score(y_test, y_pred)),
+        "precision": float(precision_score(y_test, y_pred, zero_division=0)),
+        "recall": float(recall_score(y_test, y_pred, zero_division=0)),
+        "f1": float(f1_score(y_test, y_pred, zero_division=0)),
+        "roc_auc": float(roc_auc_score(y_test, y_score)),
+        "pr_auc": float(average_precision_score(y_test, y_score)),
+    }
+
+    logger.info(f"Метрики: {metrics}")
+
+    # Артефакты
+    out_dir = Path(ARTIFACTS_DIR) / "evaluate"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    report_path = out_dir / "classification_report.txt"
+    cm_path = out_dir / "confusion_matrix.csv"
+    errors_path = out_dir / "errors.csv"
+
+    report = classification_report(y_test, y_pred, digits=4)
+    report_path.write_text(report, encoding="utf-8")
+
+    cm = confusion_matrix(y_test, y_pred)
+    pd.DataFrame(cm, index=["true_0", "true_1"], columns=["pred_0", "pred_1"]).to_csv(cm_path)
+
+    # CSV с ошибками (только ошибочные строки)
+    err_mask = (y_pred != y_test)
+    if np.any(err_mask):
+        err_df = X_test.loc[err_mask].copy()
+        err_df["y_true"] = y_test[err_mask]
+        err_df["y_pred"] = y_pred[err_mask]
+        err_df["y_score"] = y_score[err_mask]
+        err_df.to_csv(errors_path, index=False)
+    else:
+        # если вдруг нет ошибок — логируем пустой файл, чтобы артефакт стабильно существовал
+        pd.DataFrame(columns=list(X_test.columns) + ["y_true", "y_pred", "y_score"]).to_csv(
+            errors_path, index=False
         )
-    model = load(MODEL_FILEPATH)
 
-    # logger.info('Скорим модель на тесте')
-    # y_proba = model.predict_proba(X_test)[:, 1]
-    # y_pred = np.where(y_proba >= 0.5, 1, 0)
-
-    logger.info('Начали считать метрики на тесте')
-    metrics = {}
-    for metric_name in params['metrics']:
-        scorer = get_scorer(metric_name)
-        score = scorer(model, X_test, y_test)
-        metrics[metric_name] = score
-    logger.info(f'Значения метрик - {metrics}')
+    artifact_paths = [str(report_path), str(cm_path), str(errors_path)]
+    return metrics, artifact_paths
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     evaluate()
