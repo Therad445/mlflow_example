@@ -87,15 +87,18 @@ def main():
                 **{f"model__{k}": v for k, v in model_info["model_params"].items()},
             }
 
-            dataset_ref = f"mlflow:{MLFLOW_TRACKING_URI} exp={EXPERIMENT_NAME} run={mlflow.active_run().info.run_id} artifact=dataset/"
+            dataset_ref = f"mlflow:{MLFLOW_TRACKING_URI} exp={EXPERIMENT_NAME} run={mlflow.active_run().info.run_id} artifact=datasets/"
             code_ref = f"git:unknown (fill later)"
 
+            run_id = mlflow.active_run().info.run_id
             reg = register_model_to_registry(
                 metrics=metrics,
                 params=registry_params,
                 dataset_ref=dataset_ref,
                 code_ref=code_ref,
+                run_id=run_id,
             )
+
             print("Registered in registry:", reg)
         except Exception as e:
             print("Registry registration skipped:", e)
