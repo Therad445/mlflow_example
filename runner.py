@@ -75,5 +75,33 @@ def main():
             mlflow.sklearn.log_model(model, artifact_path="model")
 
 
+        # register the best artifact with metadata
+        try:
+            from scripts.register_model import register_model_to_registry
+
+            registry_params = {
+                "data__train_size": data_info["train_size"],
+                "data__test_size": data_info["test_size"],
+                "data__features": ",".join(data_info["features"]),
+                "model_type": model_info["model_type"],
+                **{f"model__{k}": v for k, v in model_info["model_params"].items()},
+            }
+
+            dataset_ref = f"mlflow:{MLFLOW_TRACKING_URI} exp={EXPERIMENT_NAME} run={mlflow.active_run().info.run_id} artifact=datasets/"
+            code_ref = f"git:unknown (fill later)"
+
+            run_id = mlflow.active_run().info.run_id
+            reg = register_model_to_registry(
+                metrics=metrics,
+                params=registry_params,
+                dataset_ref=dataset_ref,
+                code_ref=code_ref,
+                run_id=run_id,
+            )
+
+            print("Registered in registry:", reg)
+        except Exception as e:
+            print("Registry registration skipped:", e)
+
 if __name__ == "__main__":
     main()
