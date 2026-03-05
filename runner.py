@@ -4,6 +4,7 @@ from pathlib import Path
 import mlflow
 import mlflow.sklearn
 import mlflow.xgboost
+from joblib import load as joblib_load
 
 from constants import DATA_DIR, EXPERIMENT_NAME, MLFLOW_TRACKING_URI
 from scripts import evaluate, process_data, train
@@ -28,7 +29,6 @@ def main():
 
         data_info = process_data()
         log_dataset_artifacts()
-
         model, model_info = train()
 
         run_name = (
@@ -47,14 +47,13 @@ def main():
         mlflow.log_param("model_type", model_info["model_type"])
         mlflow.log_params({f"model__{k}": v for k, v in model_info["model_params"].items()})
 
-        # metrics + artifacts
-        metrics, artifact_paths = evaluate(model=model)
+        # metrics + artifacts (логируем директорию целиком)
+        metrics, artifacts_dir = evaluate(model_path=model_info["model_path"])
         mlflow.log_metrics(metrics)
+        mlflow.log_artifacts(artifacts_dir, artifact_path="artifacts/evaluate")
 
-        for p in artifact_paths:
-            mlflow.log_artifact(p, artifact_path="artifacts")
-
-        # model
+        # model (как MLflow model, не как artifact)
+        model = joblib_load(model_info["model_path"])
         if model_info["model_type"].lower() == "xgboost":
             mlflow.xgboost.log_model(model, artifact_path="model")
         else:
