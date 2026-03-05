@@ -40,6 +40,24 @@
 - f10: 0.8885
 - f13: 0.9178
 
+### Скриншоты из MLflow UI
+
+**Разрез: train_size**
+![train_size roc_auc](report_assets/train_size_roc_auc.png)
+![train_size pr_auc](report_assets/train_size_pr_auc.png)
+
+**Разрез: model_type**
+![model_type compare](report_assets/model_type.png)
+
+**Разрез: features**
+![features compare](report_assets/features.png)
+
+**Таблица сравнения (MLflow Compare Metrics):**
+![features metrics table](report_assets/features_table.png)
+
+**Таблица сравнения (MLflow Compare Metrics):**
+![model_type metrics table](report_assets/model_type_table.png)
+
 **Вывод:** добавление информативных числовых и социальных признаков сильно улучшает качество.
 
 ## лучший запуск по ROC-AUC
