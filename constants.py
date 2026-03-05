@@ -9,7 +9,7 @@ ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
 DATASET_PATH_PATTERN = str(DATA_DIR / "{split_name}.csv")
 DATASET_NAME = "scikit-learn/adult-census-income"
 
-MODEL_FILEPATH = str(PROJECT_ROOT / "model.joblib")
+MODEL_FILEPATH = PROJECT_ROOT / "model.joblib"
 
 RANDOM_STATE = 42
 TEST_SIZE = 0.3

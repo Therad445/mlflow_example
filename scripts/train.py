@@ -1,3 +1,5 @@
+from functools import partial
+
 import pandas as pd
 from joblib import dump
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
@@ -10,32 +12,25 @@ from utils import get_logger, load_params
 
 STAGE_NAME = "train"
 
+MODELS = {
+    "logistic_regression": LogisticRegression,
+    "decision_tree": DecisionTreeClassifier,
+    "random_forest": RandomForestClassifier,
+    "gradient_boosting": GradientBoostingClassifier,
+    "xgboost": partial(XGBClassifier, eval_metric="logloss"),
+}
+
 
 def _make_model(model_type: str, model_params: dict):
     mt = model_type.lower()
-
-    if mt == "logistic_regression":
-        return LogisticRegression(random_state=RANDOM_STATE, **model_params)
-
-    if mt == "decision_tree":
-        return DecisionTreeClassifier(random_state=RANDOM_STATE, **model_params)
-
-    if mt == "random_forest":
-        return RandomForestClassifier(random_state=RANDOM_STATE, **model_params)
-
-    if mt == "gradient_boosting":
-        return GradientBoostingClassifier(random_state=RANDOM_STATE, **model_params)
-
-    if mt == "xgboost":
-        return XGBClassifier(random_state=RANDOM_STATE, eval_metric="logloss", **model_params)
-
-    raise ValueError(
-        f"Unknown model_type='{model_type}'. Use one of: "
-        "logistic_regression, decision_tree, random_forest, gradient_boosting, xgboost"
-    )
+    if mt not in MODELS:
+        raise ValueError(
+            f"Unknown model_type='{model_type}'. Use one of: {', '.join(MODELS.keys())}"
+        )
+    return MODELS[mt](random_state=RANDOM_STATE, **model_params)
 
 
-def train() -> tuple[object, dict]:
+def train() -> dict:
     logger = get_logger(logger_name=STAGE_NAME)
     params = load_params(stage_name=STAGE_NAME)
 
@@ -55,11 +50,14 @@ def train() -> tuple[object, dict]:
     model.fit(X_train, y_train)
 
     logger.info("Сохраняем модель (joblib)")
-    dump(model, MODEL_FILEPATH)
-    logger.info("Успешно!")
+    dump(model, str(MODEL_FILEPATH))
+    logger.info(f"Успешно! model_path={MODEL_FILEPATH}")
 
-    meta = {"model_type": model_type, "model_params": model_params}
-    return model, meta
+    return {
+        "model_type": model_type,
+        "model_params": model_params,
+        "model_path": str(MODEL_FILEPATH),
+    }
 
 
 if __name__ == "__main__":
