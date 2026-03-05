@@ -4,19 +4,35 @@ from pathlib import Path
 import mlflow
 import mlflow.sklearn
 import mlflow.xgboost
+from joblib import load as joblib_load
 
 from constants import DATA_DIR, EXPERIMENT_NAME, MLFLOW_TRACKING_URI
 from scripts import evaluate, process_data, train
 
-
-def log_dataset_artifacts():
+def log_dataset_artifacts() -> None:
     data_dir = Path(DATA_DIR)
-    files = ["X_train.csv", "y_train.csv", "X_test.csv", "y_test.csv"]
 
-    for name in files:
+    train_files = ["X_train.csv", "y_train.csv"]
+    test_files = ["X_test.csv", "y_test.csv"]
+
+    logged = 0
+
+    for name in train_files:
         p = data_dir / name
-        if p.exists():
-            mlflow.log_artifact(str(p), artifact_path="dataset")
+        if not p.exists():
+            raise FileNotFoundError(f"Dataset artifact not found: {p}")
+        mlflow.log_artifact(str(p), artifact_path="datasets/train")
+        logged += 1
+
+    for name in test_files:
+        p = data_dir / name
+        if not p.exists():
+            raise FileNotFoundError(f"Dataset artifact not found: {p}")
+        mlflow.log_artifact(str(p), artifact_path="datasets/test")
+        logged += 1
+
+    mlflow.set_tag("has_dataset_artifacts", "true")
+    mlflow.log_param("dataset_artifacts_logged_files", logged)
 
 
 def main():
@@ -28,8 +44,7 @@ def main():
 
         data_info = process_data()
         log_dataset_artifacts()
-
-        model, model_info = train()
+        model_info = train()
 
         run_name = (
             f"{model_info['model_type']}_"
@@ -47,14 +62,13 @@ def main():
         mlflow.log_param("model_type", model_info["model_type"])
         mlflow.log_params({f"model__{k}": v for k, v in model_info["model_params"].items()})
 
-        # metrics + artifacts
-        metrics, artifact_paths = evaluate(model=model)
+        # metrics + artifacts (логируем директорию целиком)
+        metrics, artifacts_dir = evaluate(model_path=model_info["model_path"])
         mlflow.log_metrics(metrics)
+        mlflow.log_artifacts(artifacts_dir, artifact_path="artifacts/evaluate")
 
-        for p in artifact_paths:
-            mlflow.log_artifact(p, artifact_path="artifacts")
-
-        # model
+        # model (как MLflow model, не как artifact)
+        model = joblib_load(model_info["model_path"])
         if model_info["model_type"].lower() == "xgboost":
             mlflow.xgboost.log_model(model, artifact_path="model")
         else:
