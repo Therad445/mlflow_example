@@ -23,6 +23,7 @@ def register_model_to_registry(
     params: dict,
     dataset_ref: str | None,
     code_ref: str | None,
+    run_id: str | None = None,
     model_path: str = MODEL_FILEPATH,
 ):
     # Create model
@@ -45,7 +46,9 @@ def register_model_to_registry(
         model_id = r.json()["id"]
 
     # Presign upload
-    obj_name = f"models/{MODEL_NAME}/latest/model.joblib"
+    run_id = os.getenv("MLFLOW_RUN_ID", "manual")
+    rid = run_id or os.getenv("MLFLOW_RUN_ID") or "manual"
+    obj_name = f"models/{MODEL_NAME}/runs/{rid}/model.joblib"
     r = requests.post(
         f"{REGISTRY_URL}/v1/artifacts/presign-upload",
         json={"object_name": obj_name, "content_type": "application/octet-stream"},
@@ -94,5 +97,6 @@ if __name__ == "__main__":
         params={"experiment": EXPERIMENT_NAME},
         dataset_ref="local:data/",
         code_ref="local",
+        run_id="manual",
     )
     print(res)
