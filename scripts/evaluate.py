@@ -21,7 +21,7 @@ from utils import get_logger, load_params
 STAGE_NAME = "evaluate"
 
 
-def evaluate(model=None) -> tuple[dict, list[str]]:
+def evaluate(model_path: str | None = None) -> tuple[dict, str]:
     logger = get_logger(logger_name=STAGE_NAME)
     params = load_params(stage_name=STAGE_NAME)
 
@@ -31,18 +31,19 @@ def evaluate(model=None) -> tuple[dict, list[str]]:
     X_test = pd.read_csv(DATASET_PATH_PATTERN.format(split_name="X_test"))
     y_test = pd.read_csv(DATASET_PATH_PATTERN.format(split_name="y_test"))["target"].to_numpy()
 
-    if model is None:
-        logger.info("Загружаем обученную модель")
-        if not os.path.exists(MODEL_FILEPATH):
-            raise FileNotFoundError("Не нашли файл с моделью. Запусти train перед evaluate.")
-        model = load(MODEL_FILEPATH)
+    mp = model_path or str(MODEL_FILEPATH)
+
+    logger.info(f"Загружаем обученную модель: {mp}")
+    if not os.path.exists(mp):
+        raise FileNotFoundError("Не нашли файл с моделью. Запусти train перед evaluate.")
+    model = load(mp)
 
     # scores для ROC-AUC / PR-AUC
     if hasattr(model, "predict_proba"):
         y_score = model.predict_proba(X_test)[:, 1]
     elif hasattr(model, "decision_function"):
         raw = model.decision_function(X_test)
-        # нормализуем в [0,1], чтобы метрики не падали
+        # нормализуем в [0,1], чтобы threshold имел смысл и метрики не падали
         y_score = (raw - raw.min()) / (raw.max() - raw.min() + 1e-9)
     else:
         raise TypeError("Model has neither predict_proba nor decision_function")
@@ -72,7 +73,9 @@ def evaluate(model=None) -> tuple[dict, list[str]]:
     report_path.write_text(report, encoding="utf-8")
 
     cm = confusion_matrix(y_test, y_pred)
-    pd.DataFrame(cm, index=["true_0", "true_1"], columns=["pred_0", "pred_1"]).to_csv(cm_path)
+    df_cm = pd.DataFrame(cm, index=["true_0", "true_1"], columns=["pred_0", "pred_1"])
+    # index_label — чтобы в MLflow/просмотрщиках не выглядело как “строки пропали”
+    df_cm.to_csv(cm_path, index=True, index_label="true\\pred")
 
     # CSV с ошибками (только ошибочные строки)
     err_mask = (y_pred != y_test)
@@ -83,13 +86,11 @@ def evaluate(model=None) -> tuple[dict, list[str]]:
         err_df["y_score"] = y_score[err_mask]
         err_df.to_csv(errors_path, index=False)
     else:
-        # если вдруг нет ошибок — логируем пустой файл, чтобы артефакт стабильно существовал
         pd.DataFrame(columns=list(X_test.columns) + ["y_true", "y_pred", "y_score"]).to_csv(
             errors_path, index=False
         )
 
-    artifact_paths = [str(report_path), str(cm_path), str(errors_path)]
-    return metrics, artifact_paths
+    return metrics, str(out_dir)
 
 
 if __name__ == "__main__":
