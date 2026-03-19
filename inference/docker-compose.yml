@@ -1,0 +1,43 @@
+services:
+  baseline:
+    build:
+      context: ..
+      dockerfile: inference/Dockerfile
+    environment:
+      EMBED_MODEL_ID: sergeyzh/rubert-mini-frida
+      TORCH_NUM_THREADS: 4
+    command: python -m uvicorn inference.apps.baseline_app:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8011:8000"
+    volumes:
+      - ..:/app
+
+  onnx:
+    build:
+      context: ..
+      dockerfile: inference/Dockerfile
+    environment:
+      EMBED_MODEL_ID: sergeyzh/rubert-mini-frida
+      ONNX_MODEL_DIR: /app/artifacts/onnx/rubert-mini-frida
+      ONNX_NUM_THREADS: 4
+    command: python -m uvicorn inference.apps.onnx_app:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8012:8000"
+    volumes:
+      - ..:/app
+
+  batching:
+    build:
+      context: ..
+      dockerfile: inference/Dockerfile
+    environment:
+      EMBED_MODEL_ID: sergeyzh/rubert-mini-frida
+      ONNX_MODEL_DIR: /app/artifacts/onnx/rubert-mini-frida
+      ONNX_NUM_THREADS: 4
+      DYN_BATCH_MAX_SIZE: 32
+      DYN_BATCH_TIMEOUT_MS: 8
+    command: python -m uvicorn inference.apps.batching_app:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8013:8000"
+    volumes:
+      - ..:/app
