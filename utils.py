@@ -1,32 +1,32 @@
 import logging
 import os
-import yaml
 import warnings
+from pathlib import Path
 
+import yaml
 from sklearn.exceptions import DataConversionWarning
 
-logging.basicConfig(format='%(asctime)s : %(levelname)s : %(name)s : %(message)s')
-warnings.filterwarnings('ignore', category=FutureWarning)
-warnings.filterwarnings('ignore', category=DataConversionWarning)
+from constants import PARAMS_DIR
 
-PARAMS_FILEPATH_PATTERN = '/app/params/{stage_name}.yaml'
+logging.basicConfig(format="%(asctime)s : %(levelname)s : %(name)s : %(message)s")
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=DataConversionWarning)
+
+PARAMS_FILEPATH_PATTERN = str(Path(PARAMS_DIR) / "{stage_name}.yaml")
 
 
 def load_params(stage_name: str) -> dict:
     params_filepath = PARAMS_FILEPATH_PATTERN.format(stage_name=stage_name)
     if not os.path.exists(params_filepath):
         raise FileNotFoundError(
-            f'Параметров для шага {stage_name} не существует! Проверьте имя шага'
+            f"Параметров для шага {stage_name} не существует! Проверьте имя шага"
         )
-    with open(params_filepath, 'r') as file:
+    with open(params_filepath, "r", encoding="utf-8") as file:
         params = yaml.safe_load(file)
-    return params['params']
+    return params["params"]
 
 
-def get_logger(
-    logger_name: str | None = None,
-    level: int = 20,
-) -> logging.Logger:
+def get_logger(logger_name: str | None = None, level: int = 20) -> logging.Logger:
     logger = logging.getLogger(name=logger_name)
     logger.setLevel(level)
     return logger
