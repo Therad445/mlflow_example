@@ -16,3 +16,14 @@ TEST_SIZE = 0.3
 
 MLFLOW_TRACKING_URI = "http://158.160.2.37:5000"
 EXPERIMENT_NAME = "homework_islamov"
+
+ALL_CATEGORICAL_FEATURES = {
+    "workclass",
+    "education",
+    "marital.status",
+    "occupation",
+    "relationship",
+    "race",
+    "sex",
+    "native.country",
+}
