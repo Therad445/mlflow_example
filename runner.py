@@ -3,11 +3,13 @@ from pathlib import Path
 
 import mlflow
 import mlflow.sklearn
-import mlflow.xgboost
+import pandas as pd
 from joblib import load as joblib_load
+from mlflow.models import infer_signature
 
 from constants import DATA_DIR, EXPERIMENT_NAME, MLFLOW_TRACKING_URI
 from scripts import evaluate, process_data, train
+
 
 def log_dataset_artifacts() -> None:
     data_dir = Path(DATA_DIR)
@@ -54,7 +56,6 @@ def main():
         )
         mlflow.set_tag("mlflow.runName", run_name)
 
-        # params
         mlflow.log_param("data__train_size", data_info["train_size"])
         mlflow.log_param("data__test_size", data_info["test_size"])
         mlflow.log_param("data__features", ",".join(data_info["features"]))
@@ -62,20 +63,26 @@ def main():
         mlflow.log_param("model_type", model_info["model_type"])
         mlflow.log_params({f"model__{k}": v for k, v in model_info["model_params"].items()})
 
-        # metrics + artifacts (логируем директорию целиком)
         metrics, artifacts_dir = evaluate(model_path=model_info["model_path"])
         mlflow.log_metrics(metrics)
         mlflow.log_artifacts(artifacts_dir, artifact_path="artifacts/evaluate")
 
-        # model (как MLflow model, не как artifact)
         model = joblib_load(model_info["model_path"])
-        if model_info["model_type"].lower() == "xgboost":
-            mlflow.xgboost.log_model(model, artifact_path="model")
-        else:
-            mlflow.sklearn.log_model(model, artifact_path="model")
+        X_train = pd.read_csv(Path(DATA_DIR) / "X_train.csv")
 
+        input_example = X_train.head(3)
+        signature = infer_signature(
+            X_train.head(20),
+            model.predict_proba(X_train.head(20)),
+        )
 
-        # register the best artifact with metadata
+        mlflow.sklearn.log_model(
+            sk_model=model,
+            artifact_path="model",
+            input_example=input_example,
+            signature=signature,
+        )
+
         try:
             from scripts.register_model import register_model_to_registry
 
@@ -87,8 +94,13 @@ def main():
                 **{f"model__{k}": v for k, v in model_info["model_params"].items()},
             }
 
-            dataset_ref = f"mlflow:{MLFLOW_TRACKING_URI} exp={EXPERIMENT_NAME} run={mlflow.active_run().info.run_id} artifact=datasets/"
-            code_ref = f"git:unknown (fill later)"
+            dataset_ref = (
+                f"mlflow:{MLFLOW_TRACKING_URI} "
+                f"exp={EXPERIMENT_NAME} "
+                f"run={mlflow.active_run().info.run_id} "
+                f"artifact=datasets/"
+            )
+            code_ref = "git:unknown (fill later)"
 
             run_id = mlflow.active_run().info.run_id
             reg = register_model_to_registry(
@@ -102,6 +114,7 @@ def main():
             print("Registered in registry:", reg)
         except Exception as e:
             print("Registry registration skipped:", e)
+
 
 if __name__ == "__main__":
     main()
